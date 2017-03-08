@@ -1,7 +1,7 @@
 {
-  "name": "__BONES_NEEDS_A_NAME__",
+  "name": "welcome-to-hogwarts",
   "version": "0.0.1",
-  "description": "A happy little skeleton.",
+  "description": "Hogwarts intake form for new students (a React forms workshop)",
   "main": "index.js",
   "scripts": {
     "validate": "check-node-version --node '>= 6.7.0'",
