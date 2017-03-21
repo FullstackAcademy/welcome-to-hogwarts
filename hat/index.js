@@ -3,6 +3,11 @@ const Rx = require('rx')
     , auth = firebase.auth()
     , db = firebase.database()
 
+const values = ref => Rx.Observable.create(obs => {
+  const listener = ref.on('value', snap => obs.onNext(snap.val()))
+  return () => ref.off('value', listener)
+})
+
 const user = Rx.Observable.create(obs =>
   auth.onAuthStateChanged(user => user
     ? obs.onNext(user)
@@ -36,37 +41,20 @@ function model(fields) {
           set(val) { this.refRx.first().subscribe(ref => ref.child(field).set(val)) },
         }
       }), {})
-  return refRx => Object.defineProperties({refRx}, props)
-}
-
-function form(questions) {
-  const props = Object.keys(questions)
-    .reduce(
-      (props, field) => Object.assign({}, props, {
-        [field]: {
-          get() {
-            const ref = this.ref.child(field)
-            return Object.defineProperties(Object.create(ref), {
-              question: { get() { return questions[field] } }
-            })
-          },
-          set(val) { this.ref.child(field).set(val) },
-        }
-      }), {})
-  return ref => Object.defineProperties({ref}, props)
+  return refRx => {
+    const stream = refRx.flatMapLatest(values)
+    stream.refRx = refRx
+    Object.defineProperties(stream, props)
+    return stream
+  }
 }
 
 function reset() {
   auth.signOut()
 }
 
-const values = ref => Rx.Observable.create(obs => {
-  const listener = ref.on('value', snap => obs.onNext(snap.val()))
-  return () => ref.off('value', listener)
-})
-
 let _state = null
-home.flatMapLatest(home => values(home))
+home.flatMapLatest(values)
   .subscribe(state => {
     console.log('old state:', _state)
     _state = state    
@@ -80,4 +68,5 @@ module.exports = {
   get state() { return _state },
 }
 
-window.Hat = module.exports
+// For debugging
+global.__Hat = global.__Hat || module.exports
