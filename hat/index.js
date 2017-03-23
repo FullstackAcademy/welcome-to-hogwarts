@@ -11,13 +11,19 @@ Rx.Observable.prototype.then = function(ok, fail) {
               .then (ok, fail)
 }
 
+// watch = event: String -> ref: FirebaseRef -> Observable<Snapshot>
+
+const watch = event => ref => Rx.Observable.create(obs => {
+  const listener = ref.on(event, snap => obs.next(snap))
+  return () => ref.off(event, listener)
+})
+
+// val(snap: Snapshot<V>) -> V
+const val = snap => snap.val()
+
 // values(ref: FirebaseRef) -> Observable<Values>
 // The stream of values from a firebase ref.
-const values = ref => Rx.Observable.create(obs => {
-  console.log('values ref:', ref)
-  const listener = ref.on('value', snap => obs.onNext(snap.val()))
-  return () => ref.off('value', listener)
-})
+const values = ref => watch('value')(ref).map(val)
 
 //--//--// Auth //--//--//
 
@@ -43,14 +49,18 @@ const home = user.map(user => db.ref('users').child(user.uid))
 
 // profile is a schema applied to the home ref.
 //
-// The schema 
+// The schema maps fields to questions.
 const profile = model ({
-  name: 'Your name',
-  familiarName: "Your familiar's name (if any)",
-  dateOfBirth: 'Your birthday (if any)',
-  dateOfFirstSpell: 'The date you cast your first spell, incantation, or enchantment',
-}) (home)
+  // Strings
+  name: Ask('Your name'),
+  familiarName: Ask("Your familiar's name (if any)"),
 
+  // These should be numbers, ms since the epoch.
+  dateOfBirth: Ask('Your birthday (if any)'),
+  dateOfFirstSpell: Ask('The date you cast your first spell, incantation, or enchantment'),
+
+  howDidYouHearAboutUs: Ask('How did you hear about Hogwarts?'),
+}) (home)
 
 let _state = null
 home.flatMapLatest(values)
@@ -69,29 +79,37 @@ module.exports = {
 
 //--//--// Model metaprogramming magic //--//--//
 
+// Each question is a function that takes its field name and
+// returns a property descriptor.
+function Ask(question) {
+  return field => ({
+    get() {
+      const baseRefRx = this.ref$
+      const fieldRefRx = this.ref$.map(ref => ref.child(field))
+      return Object.defineProperties(fieldRefRx.flatMapLatest(values), {
+        question: { value: question },
+        ref: { get() { return fieldRefRx } },
+        set: { value(val) { return fieldRefRx.then(ref => ref.set(val)) } },
+      })
+    },
+    set(val) { this.ref$.then(ref => ref.child(field).set(val)) },
+  })
+}
+
 function model(fields) {
   const props = Object.keys(fields)
     .reduce(
       (props, field) => Object.assign({}, props, {
-        [field]: {
-          get() {
-            const baseRefRx = this.refRx
-            const fieldRefRx = this.refRx.map(ref => ref.child(field))
-            return Object.defineProperties(fieldRefRx.flatMapLatest(values), {
-              question: { get() { return fields[field] } },
-              ref: { get() { return fieldRefRx } },
-              set: { value(val) { return fieldRefRx.then(ref => ref.set(val)) } },
-            })
-          },
-          set(val) { this.refRx.then(ref => ref.child(field).set(val)) },
-        }
-      }), {})
+        [field]: fields[field](field)
+      }), {
+        allQuestions: {value: Object.keys(fields)}
+      })
 
   // Return a function that takes an Observable<FirebaseRef>
   // and returns a model.
-  return refRx => {
-    const stream = refRx.flatMapLatest(values)
-    stream.refRx = refRx
+  return ref$ => {
+    const stream = ref$.flatMapLatest(values)
+    stream.ref$ = ref$
     Object.defineProperties(stream, props)
     return stream
   }

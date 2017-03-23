@@ -11,7 +11,7 @@ import WhoAmI from './components/WhoAmI'
 
 class Layout extends React.Component {
   componentDidMount() {
-    this.unsubscribe = Hat.profile.subscribe(user => this.setState({user}))
+    this.unsubscribe = Hat.profile.name.subscribe(name => this.setState({name}))
   }
 
   componentWillUnmount() {
@@ -20,11 +20,10 @@ class Layout extends React.Component {
 
   render() {
     if (!this.state) return null
-    const user = this.state.user || {}
-        , name = user.name
+    const name = this.state.name
         , {children} = this.props
     return <div>
-             <h1>Welcome, {user.name}</h1>
+             <h1>Welcome, {name}</h1>
              {children}
            </div>
   }
