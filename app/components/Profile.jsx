@@ -23,7 +23,7 @@ export default class Profile extends Component {
   //   - Dates should become dates via chrono-node
   //   - Name can't be blank
   //   - Date of first spell can't be before date of birth
-  // 4. Refactor: 
+  // 4. Refactor: Create a <Question> component that 
   
   render() {
     if (!this.state) return null
